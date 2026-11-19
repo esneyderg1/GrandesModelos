@@ -1,9 +1,25 @@
+"""
+Acceso a la base de datos que consulta el agente SQL.
+
+Este archivo responde tres preguntas:
+  1. ¿Qué tablas conoce el modelo?             → SCHEMA
+  2. ¿Qué SQL se permite ejecutar?             → validate_sql()   (candado 1)
+  3. ¿Cómo se ejecuta sin riesgo para la base? → execute_query()  (candado 2)
+"""
+
+import re
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 import pandas as pd
 
 DB_PATH = Path(__file__).parent.parent.parent / "data" / "database" / "Procesos_clean.db"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 1. ESQUEMA: la descripción de las tablas que se le entrega al modelo
+# ─────────────────────────────────────────────────────────────────────────────
 
 SCHEMA = """
 Base de datos SQLite: Procesos_clean.db
@@ -54,17 +70,89 @@ Contiene datos de automatizaciones RPA de una organización de salud en Colombia
 """
 
 
-def get_connection() -> sqlite3.Connection:
-    return sqlite3.connect(DB_PATH)
-
-
 def get_schema() -> str:
     return SCHEMA
 
 
-def execute_query(sql: str) -> pd.DataFrame:
-    with get_connection() as conn:
+# ─────────────────────────────────────────────────────────────────────────────
+# 2. CANDADO 1: revisar el texto de la consulta antes de ejecutarla
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Sentencias que el agente nunca puede ejecutar. `REPLACE INTO` se revisa aparte
+# porque replace() es una función de texto legítima dentro de un SELECT.
+FORBIDDEN_KEYWORDS = (
+    "INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "CREATE", "TRUNCATE",
+    "ATTACH", "DETACH", "PRAGMA", "VACUUM", "REINDEX",
+)
+_FORBIDDEN_RE = re.compile(
+    r"\b(" + "|".join(FORBIDDEN_KEYWORDS) + r")\b|\bREPLACE\s+INTO\b", re.IGNORECASE
+)
+# Comentarios (-- y /* */) y textos entre comillas simples.
+_COMMENTS_AND_STRINGS_RE = re.compile(r"--[^\n]*|/\*.*?\*/|'(?:[^']|'')*'", re.DOTALL)
+
+
+class ForbiddenSQLError(ValueError):
+    """La consulta no es una única sentencia de solo lectura."""
+
+
+def validate_sql(sql: str) -> str:
+    """
+    Deja pasar la consulta solo si cumple las tres reglas; si no, lanza ForbiddenSQLError:
+      1. Es UNA sola sentencia (sin ';' en la mitad).
+      2. Empieza por SELECT o WITH.
+      3. No contiene ninguna palabra de FORBIDDEN_KEYWORDS.
+
+    Retorna la consulta sin el punto y coma final.
+    """
+    sql = sql.strip().rstrip(";").strip()
+    # Las reglas se revisan sobre el código sin comentarios ni textos entre comillas:
+    # así  WHERE Estado = 'Delete'  no se bloquea por error, y un comentario no puede
+    # esconder una sentencia.
+    code_only = _COMMENTS_AND_STRINGS_RE.sub(" ", sql).strip()
+
+    if not code_only:
+        raise ForbiddenSQLError("La consulta está vacía.")
+    if ";" in code_only:
+        raise ForbiddenSQLError("Solo se permite una sentencia por consulta.")
+    if not re.match(r"(SELECT|WITH)\b", code_only, re.IGNORECASE):
+        raise ForbiddenSQLError("Solo se permiten consultas SELECT.")
+    forbidden = _FORBIDDEN_RE.search(code_only)
+    if forbidden:
+        raise ForbiddenSQLError(f"Sentencia no permitida: {forbidden.group(0).upper()}.")
+    return sql
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 3. CANDADO 2: ejecutar con una conexión de solo lectura
+# ─────────────────────────────────────────────────────────────────────────────
+
+def execute_query(sql: str, views: dict[str, str] | None = None) -> pd.DataFrame:
+    """
+    Ejecuta una consulta escrita por el modelo y retorna el resultado como tabla.
+
+    Dos candados independientes protegen la base:
+      1. validate_sql() solo deja pasar un SELECT.
+      2. La conexión se abre en modo solo lectura (mode=ro): aunque algo se
+         escapara del candado 1, SQLite se niega a escribir.
+
+    `views` son consultas con nombre ({nombre: SELECT}) que el modelo puede usar
+    como si fueran tablas. Se crean como vistas temporales: existen solo mientras
+    dura esta conexión y no modifican el archivo de la base.
+    """
+    sql = validate_sql(sql)
+    read_only_uri = f"{DB_PATH.resolve().as_uri()}?mode=ro"
+    with closing(sqlite3.connect(read_only_uri, uri=True)) as conn:
+        for name, select_sql in (views or {}).items():
+            conn.execute(f"CREATE TEMP VIEW {name} AS {select_sql}")
         return pd.read_sql_query(sql, conn)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Estadísticas para la barra lateral de la app (no pasan por el modelo)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def get_connection() -> sqlite3.Connection:
+    return sqlite3.connect(DB_PATH)
 
 
 def get_db_stats() -> dict:

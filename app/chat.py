@@ -539,9 +539,11 @@ with tab_chat:
 
         with st.chat_message("assistant"):
             with st.spinner(f"Consultando con {selected_model}..."):
+                # El historial va sin la pregunta actual (recién agregada arriba):
+                # ask() la añade al final, así el modelo no la recibe dos veces.
                 result = ask(
                     question=prompt,
-                    history=st.session_state["messages"],
+                    history=st.session_state["messages"][:-1],
                     model=selected_model,
                 )
 

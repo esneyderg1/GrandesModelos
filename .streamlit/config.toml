@@ -3,6 +3,7 @@ gatherUsageStats = false
 
 [server]
 headless = true
+address = "localhost"
 
 [theme]
 primaryColor = "#db0061"

@@ -76,9 +76,11 @@ Proyecto1Especializacion/
 ├── assets/
 │   └── logo.svg                 ← logo Sinfama (paleta de marca)
 ├── src/
-│   ├── agent/
-│   │   ├── database.py          ← conexión SQLite y esquema para el LLM
-│   │   └── sql_agent.py         ← agente SQL con Ollama (generar SQL + interpretar)
+│   ├── agent/                   ← ver GUIA_AGENTE.md para entenderlo paso a paso
+│   │   ├── sql_agent.py         ← el flujo: pregunta → SQL → ejecutar → interpretar (llama a Ollama)
+│   │   ├── prompts.py           ← todos los textos que lee el modelo
+│   │   ├── query_catalog.py     ← base de consultas validadas + vista de ROI (guía del modelo)
+│   │   └── database.py          ← esquema, validación de solo lectura y ejecución en SQLite
 │   ├── models/
 │   │   └── roi_predictor.py     ← pipeline XGBoost con log-transform del target
 │   └── utils/
@@ -99,6 +101,7 @@ Proyecto1Especializacion/
 ├── models/                      ← roi_model.joblib (generado por train_roi_model.py)
 ├── reports/                     ← figuras (notebooks) y métricas JSON (pipeline)
 ├── .streamlit/config.toml       ← configuración headless de Streamlit
+├── GUIA_AGENTE.md               ← cómo funciona el agente SQL y cómo explicarlo
 ├── PITCH.md                     ← presentación académica del proyecto
 ├── pyproject.toml
 └── run_app.bat                  ← acceso rápido en Windows
