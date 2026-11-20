@@ -222,7 +222,7 @@ La app queda disponible en **http://localhost:8501**
 
 ### Permisos del navegador
 
-La primera vez que aprietes el botón **🎤 Grabar pregunta** en la pestaña Chat SQL, el navegador te pedirá permiso para usar el micrófono. **Acepta** para habilitar la entrada por voz. Si lo rechazaste por accidente, puedes habilitarlo después desde el ícono del candado en la barra de direcciones.
+La primera vez que aprietes el **micrófono de la caja de texto** en la pestaña Chat SQL, el navegador te pedirá permiso para usar el micrófono. **Acepta** para habilitar la entrada por voz. Si lo rechazaste por accidente, puedes habilitarlo después desde el ícono del candado en la barra de direcciones.
 
 > **Nota:** la API `MediaRecorder` solo funciona en `localhost` o sobre HTTPS. Si despliegas la app en otra máquina por IP en HTTP, el botón de micrófono fallará silenciosamente — usa siempre `localhost` o configura HTTPS.
 
@@ -252,7 +252,7 @@ En Windows, si instalaste Ollama con el instalador oficial, suele iniciarse auto
 
 ### El botón 🎤 de micrófono no aparece o no graba
 
-- **No aparece:** verifica que tu versión de Streamlit sea ≥ 1.31 (`uv pip show streamlit`). El componente de grabación es nativo (`st.audio_input`), no requiere paquetes adicionales.
+- **No aparece:** verifica que tu versión de Streamlit sea ≥ 1.57 (`uv pip show streamlit`). El micrófono es parte de la caja de texto del chat (`st.chat_input(accept_audio=True)`), no requiere paquetes adicionales.
 - **Aparece pero no graba:** revisa permisos del navegador. Click en el ícono del candado en la barra de direcciones → permitir micrófono. Recarga la página.
 - **Graba pero no transcribe:** ejecuta `uv run python scripts/download_whisper.py` para asegurarte de que el modelo Whisper-small está descargado. Si la descarga falló por conexión, vuelve a correrlo.
 
@@ -273,7 +273,9 @@ Haz preguntas en español sobre los datos por **texto o por voz**. El agente gen
 
 **Por texto:** escribe la pregunta en el campo inferior y presiona Enter.
 
-**Por voz:** presiona **🎤 Grabar pregunta**, di la pregunta, presiona **⏹️ Detener**. La app transcribe el audio localmente con Whisper y envía el texto al agente automáticamente.
+**Por voz:** presiona el **micrófono** que está dentro de la caja de texto, di la pregunta y confirma con **✓** (o cancela con **✕**). La app transcribe el audio localmente con Whisper y envía el texto al agente automáticamente.
+
+La conversación se muestra arriba y la caja de texto queda fija en la parte inferior de la ventana. Cada respuesta incluye el desplegable **Ver SQL ejecutado** y la tabla de resultados.
 
 Ejemplos:
 - *"¿Cuáles son los 5 bots con más ejecuciones?"*

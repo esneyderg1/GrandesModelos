@@ -193,14 +193,26 @@ st.markdown("""<style>
   /* ── Chat ── */
   [data-testid="stChatMessage"] {
     border-radius: 12px !important;
-    margin-bottom: 0.75rem !important;
+    margin-bottom: 0.25rem !important;
   }
-  [data-testid="stChatMessage"][data-testid*="user"] {
+  /* Pregunta del usuario: burbuja rosa a la derecha, sin avatar */
+  [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {
     background-color: var(--cfm-primary-bg) !important;
+    border-radius: 18px 18px 4px 18px !important;
+    padding: 0.6rem 1.1rem !important;
   }
-  [data-testid="stChatMessage"][data-testid*="assistant"] {
-    background-color: var(--cfm-tertiary-bg) !important;
+  [data-testid="stChatMessageAvatarUser"] { display: none !important; }
+  [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) p {
+    color: var(--cfm-navy) !important;
   }
+  /* Respuesta del agente: sin fondo, con el logo como avatar */
+  [data-testid="stChatMessage"]:not(:has([data-testid="stChatMessageAvatarUser"])) {
+    background-color: transparent !important;
+    padding-left: 0 !important;
+  }
+  /* Micrófono de la caja de texto */
+  [data-testid="stChatInputMicButton"] { color: var(--cfm-primary) !important; }
+  [data-testid="stChatInputMicButton"]:hover { background-color: var(--cfm-primary-bg) !important; }
   /* El chat input debe ser blanco (secondaryBg es navy por el sidebar) */
   [data-testid="stChatInputContainer"],
   [data-testid="stChatInputContainer"] > div,
@@ -348,6 +360,10 @@ st.markdown("""<style>
     padding: 0.35rem 0.5rem !important;
   }
 
+  html body .stApp [data-testid="stSidebar"] [data-testid="stMetricValue"] {
+    font-size: 1.35rem !important;
+  }
+
   /* ── Compactar padding interno del sidebar ── */
   [data-testid="stSidebarContent"] > div {
     padding-top: 0.5rem !important;
@@ -355,45 +371,6 @@ st.markdown("""<style>
   }
   [data-testid="stSidebar"] [data-testid="stVerticalBlock"] > div {
     gap: 0.25rem !important;
-  }
-
-  /* ── Audio input (st.audio_input) — fondo claro, controles visibles ── */
-  [data-testid="stAudioInput"],
-  [data-testid="stAudioInput"] > div,
-  [data-testid="stAudioInput"] section,
-  [data-testid="stAudioInput"] [data-testid="stAudioInputWaveformContainer"],
-  [data-testid="stAudioInput"] [data-testid="stAudioInputWaveformTimeCode"] {
-    background-color: var(--cfm-tertiary-bg) !important;
-    border-radius: 8px !important;
-  }
-  [data-testid="stAudioInput"] {
-    border: 1px solid var(--cfm-border) !important;
-    padding: 0.25rem !important;
-  }
-  /* Botón de grabar/detener — circular, color de marca */
-  [data-testid="stAudioInput"] button {
-    background-color: var(--cfm-primary) !important;
-    color: var(--cfm-white) !important;
-    border: none !important;
-  }
-  [data-testid="stAudioInput"] button:hover {
-    background-color: var(--cfm-primary-dark) !important;
-  }
-  [data-testid="stAudioInput"] button svg,
-  [data-testid="stAudioInput"] button path {
-    fill: var(--cfm-white) !important;
-    stroke: var(--cfm-white) !important;
-    color: var(--cfm-white) !important;
-  }
-  /* Texto del temporizador */
-  [data-testid="stAudioInput"] [data-testid="stAudioInputWaveformTimeCode"],
-  [data-testid="stAudioInput"] span,
-  [data-testid="stAudioInput"] p {
-    color: var(--cfm-navy) !important;
-  }
-  /* Forma de onda del audio grabado */
-  [data-testid="stAudioInput"] canvas {
-    background-color: var(--cfm-tertiary-bg) !important;
   }
 </style>
 """, unsafe_allow_html=True)
@@ -473,89 +450,91 @@ with st.sidebar:
         st.rerun()
 
 # ── Área principal — pestañas ─────────────────────────────────────────────────
-tab_chat, tab_roi, tab_calc = st.tabs(["💬 Chat SQL", "📊 Análisis ROI", "🧮 Calculadora de ROI"])
+# on_change="rerun" hace que cada pestaña sepa si está abierta (tab.open).
+tab_chat, tab_roi, tab_calc = st.tabs(
+    ["💬 Chat SQL", "📊 Análisis ROI", "🧮 Calculadora de ROI"], on_change="rerun"
+)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # TAB 1 · CHAT
 # ─────────────────────────────────────────────────────────────────────────────
+# Se ve como cualquier chat: la conversación arriba y, fija en la parte inferior
+# de la ventana, la caja de texto con el botón de micrófono.
+
+BOT_AVATAR = str(Path(__file__).parent.parent / "assets" / "logo.svg")
+
+
+def render_message(msg: dict) -> None:
+    """Dibuja un mensaje: la pregunta a la derecha; la respuesta a la izquierda,
+    con el SQL ejecutado y la tabla de resultados cuando hubo consulta."""
+    if msg["role"] == "user":
+        with st.container(horizontal=True, horizontal_alignment="right"):
+            with st.chat_message("user", width="content"):
+                st.markdown(msg["content"])
+        return
+
+    with st.chat_message("assistant", avatar=BOT_AVATAR):
+        st.markdown(msg["content"])
+        if msg.get("sql"):
+            with st.expander("Ver SQL ejecutado"):
+                st.code(msg["sql"], language="sql")
+        if msg.get("data") and msg.get("columns"):
+            df_display = pd.DataFrame(msg["data"], columns=msg["columns"])
+            st.dataframe(df_display, width="stretch", hide_index=True)
+
+
+def read_question(user_input) -> str | None:
+    """Retorna la pregunta: el texto escrito o, si llegó un audio, su transcripción."""
+    question = (user_input.text or "").strip()
+    if user_input.audio is None:
+        return question or None
+
+    with st.spinner("Transcribiendo audio..."):
+        try:
+            spoken = transcribe_audio(user_input.audio.getvalue())
+        except Exception as exc:
+            st.error(f"Error al transcribir: {exc}")
+            spoken = ""
+    question = f"{question} {spoken}".strip()
+    if not question:
+        st.warning("No detecté palabras en el audio. Intenta hablar más claro o más cerca del micrófono.")
+    return question or None
+
+
+if "messages" not in st.session_state:
+    st.session_state["messages"] = []
+
+# La caja de texto se declara fuera de la pestaña para que Streamlit la fije abajo;
+# solo se muestra cuando la pestaña del chat está abierta. accept_audio le agrega
+# el micrófono: el audio se transcribe localmente con Whisper.
+user_input = None
+if tab_chat.open:
+    user_input = st.chat_input("Escribe tu pregunta o grábala con el micrófono", accept_audio=True)
+
 with tab_chat:
-    st.markdown("### Haz preguntas sobre los datos de procesos RPA")
-    st.caption(
-        "Ejemplos: *¿Cuáles son los 5 bots con más ejecuciones?* · "
-        "*¿Qué área tiene mayor tasa de error?* · "
-        "*¿Cuánto tiempo manual ahorró GestorRemitidos?*"
-    )
-
-    if "messages" not in st.session_state:
-        st.session_state["messages"] = []
-
-    # Historial de mensajes
-    for msg in st.session_state["messages"]:
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
-            if msg.get("sql"):
-                with st.expander("Ver SQL ejecutado"):
-                    st.code(msg["sql"], language="sql")
-            if msg.get("data") and msg.get("columns"):
-                df_display = pd.DataFrame(msg["data"], columns=msg["columns"])
-                st.dataframe(df_display, use_container_width=True, hide_index=True)
-
-    # Entrada por voz (opcional) — usa componente nativo de Streamlit
-    col_mic, col_hint = st.columns([2, 3])
-    with col_mic:
-        audio = st.audio_input("🎤 Graba tu pregunta", key="mic_chat")
-    with col_hint:
+    if not st.session_state["messages"] and not user_input:
+        st.markdown("### Haz preguntas sobre los datos de procesos RPA")
         st.caption(
-            "Habla en español. Al detener la grabación, se transcribe localmente "
-            "con Whisper y se envía al agente SQL."
+            "Ejemplos: *¿Cuáles son los 5 bots con más ejecuciones?* · "
+            "*¿Qué área tiene mayor tasa de error?* · "
+            "*¿Cuánto tiempo manual ahorró GestorRemitidos?*"
         )
 
-    voice_prompt = None
-    if audio is not None:
-        audio_bytes = audio.getvalue()
-        audio_hash = hash(audio_bytes)
-        if audio_hash != st.session_state.get("last_audio_hash"):
-            st.session_state["last_audio_hash"] = audio_hash
-            with st.spinner("Transcribiendo audio..."):
-                try:
-                    voice_prompt = transcribe_audio(audio_bytes)
-                except Exception as exc:
-                    st.error(f"Error al transcribir: {exc}")
-                    voice_prompt = None
-            if not voice_prompt:
-                st.warning(
-                    "No detecté palabras en el audio. Intenta hablar más claro o más cerca del micrófono."
-                )
+    for msg in st.session_state["messages"]:
+        render_message(msg)
 
-    # Entrada por texto
-    text_prompt = st.chat_input("Pregunta algo sobre los datos...")
+    # Se lee después de dibujar la conversación: así el aviso "Transcribiendo audio..."
+    # aparece al final, junto a la caja de texto.
+    question = read_question(user_input) if user_input else None
 
-    prompt = voice_prompt or text_prompt
+    if question:
+        history = list(st.session_state["messages"])  # la conversación sin la pregunta nueva
+        st.session_state["messages"].append({"role": "user", "content": question})
+        render_message(st.session_state["messages"][-1])
 
-    if prompt:
-        st.session_state["messages"].append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
-
-        with st.chat_message("assistant"):
+        with st.chat_message("assistant", avatar=BOT_AVATAR):
             with st.spinner(f"Consultando con {selected_model}..."):
-                # El historial va sin la pregunta actual (recién agregada arriba):
-                # ask() la añade al final, así el modelo no la recibe dos veces.
-                result = ask(
-                    question=prompt,
-                    history=st.session_state["messages"][:-1],
-                    model=selected_model,
-                )
-
-            st.markdown(result["response"])
-
-            if result.get("sql"):
-                with st.expander("Ver SQL ejecutado"):
-                    st.code(result["sql"], language="sql")
-
-            if result.get("data") and result.get("columns"):
-                df_result = pd.DataFrame(result["data"], columns=result["columns"])
-                st.dataframe(df_result, use_container_width=True, hide_index=True)
+                result = ask(question=question, history=history, model=selected_model)
 
         st.session_state["messages"].append(
             {
@@ -566,6 +545,7 @@ with tab_chat:
                 "columns": result.get("columns"),
             }
         )
+        st.rerun()  # vuelve a dibujar la conversación completa con la respuesta ya guardada
 
 # ─────────────────────────────────────────────────────────────────────────────
 # TAB 2 · ANÁLISIS ROI

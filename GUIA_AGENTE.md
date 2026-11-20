@@ -77,8 +77,8 @@ Los cuatro archivos del agente están en `src/agent/`. Cada uno tiene una sola r
 | **La base de consultas (la guía del modelo)** | `src/agent/query_catalog.py` | `REFERENCE_QUERIES` (ejemplos) y `VIEWS` (vista del ROI) |
 | **Las tablas que conoce el modelo** | `src/agent/database.py` | `SCHEMA` |
 | **Las sentencias prohibidas** | `src/agent/database.py` | `FORBIDDEN_KEYWORDS`, `validate_sql()`, `execute_query()` |
-| La interfaz del chat | `app/chat.py` | sección `TAB 1 · CHAT` |
-| El modelo de voz | `app/chat.py` | `get_whisper_model()` y `transcribe_audio()` |
+| La interfaz del chat | `app/chat.py` | sección `TAB 1 · CHAT`: `render_message()` dibuja cada mensaje y `st.chat_input` es la caja de texto fija abajo, con micrófono |
+| El modelo de voz | `app/chat.py` | `get_whisper_model()`, `transcribe_audio()` y `read_question()` |
 | La fórmula del ROI | `src/utils/roi_calculator.py` | `build_roi_dataset()` y `COSTO_HORA_ROBOT_COP` |
 
 Cómo se conectan (cada archivo solo usa los que tiene a su derecha):
