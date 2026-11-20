@@ -70,7 +70,7 @@ Whisper-small        │
 ## Estructura del Proyecto
 
 ```
-Proyecto1Especializacion/
+GrandesModelos/
 ├── app/
 │   └── chat.py                  ← interfaz Streamlit (Chat SQL / ROI / Predicción)
 ├── assets/
@@ -113,8 +113,9 @@ Proyecto1Especializacion/
 
 | Herramienta | Versión mínima | Notas |
 |---|---|---|
+| Git LFS | cualquiera reciente | **Obligatorio.** Las bases de datos y los CSV se guardan con Git LFS; sin él se descargan como archivos de 133 bytes y la app no puede leerlos. Instalar desde https://git-lfs.com |
 | uv | **0.4+** | Gestor de entornos y dependencias. Instalar con `pip install uv` o desde https://docs.astral.sh/uv/ |
-| Python | **3.11** | uv puede instalarlo automáticamente (`uv python install 3.11`) |
+| Python | **3.14** | No hace falta instalarlo a mano: el proyecto lo fija en `.python-version` y `uv sync` lo descarga solo |
 | Ollama | **0.23+** | Descargar en https://ollama.com |
 
 ---
@@ -156,9 +157,12 @@ Si `nvidia-smi` no está instalado o no detecta GPU, la app igual funciona en CP
 ### 1. Clonar el repositorio
 
 ```bash
-git clone <url-del-repositorio>
-cd Proyecto1Especializacion
+git lfs install        # una sola vez por equipo; debe ir ANTES de clonar
+git clone https://github.com/esneyderg1/GrandesModelos.git
+cd GrandesModelos
 ```
+
+La descarga pesa unos 425 MB porque incluye las bases de datos. Para confirmar que llegaron completas, `data/database/Procesos_clean.db` debe pesar cerca de 71 MB (no 133 bytes).
 
 ### 2. Instalar dependencias con uv
 
@@ -197,8 +201,10 @@ Construye el dataset desde `Procesos_clean.db`, entrena XGBoost (GPU si hay CUDA
 **Opción B — notebooks paso a paso (recomendado la primera vez para entender el flujo):**
 
 ```bash
-uv run jupyter lab
+uv run --with jupyterlab jupyter lab
 ```
+
+JupyterLab no es una dependencia del proyecto; `--with jupyterlab` lo agrega solo para esa ejecución. También puedes abrir los notebooks en VS Code eligiendo el intérprete de `.venv`.
 
 Luego abrir en orden:
 
@@ -230,9 +236,18 @@ La primera vez que aprietes el **micrófono de la caja de texto** en la pestaña
 
 ## Solución de Problemas
 
+### La app muestra `file is not a database` o la base pesa 133 bytes
+
+El repositorio se clonó sin Git LFS, así que en lugar de las bases de datos llegaron sus "punteros". Instala Git LFS y descarga los archivos reales, sin necesidad de volver a clonar:
+
+```bash
+git lfs install
+git lfs pull
+```
+
 ### `uv sync` falla con error de Python
 
-uv intenta usar la versión más reciente de Python que encuentre. Si tienes Python 3.13 o 3.14 instalado pero algunas dependencias (sklearn, pandas) aún no soportan esa versión, fija explícitamente Python 3.11:
+El proyecto usa Python 3.14 (fijado en `.python-version`) y uv lo descarga solo. Si en tu equipo alguna dependencia no instala con esa versión, el proyecto también funciona con Python 3.11:
 
 ```bash
 uv sync --python 3.11
@@ -308,7 +323,7 @@ El costo operativo del robot es **fijo en 7.300 COP/hora** (servidor Azure + lic
 | `TiemposManuales_clean` | 95 | Tiempo manual que reemplaza cada bot |
 | `RolesAreas_clean` | 91 | Roles y áreas impactadas con valor/hora |
 
-Período cubierto: 2020 – 2024. Los archivos de base de datos están almacenados en **Git LFS**.
+Período cubierto: enero de 2021 – octubre de 2026. Los archivos de base de datos están almacenados en **Git LFS**.
 
 ---
 
